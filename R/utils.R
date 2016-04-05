@@ -37,7 +37,7 @@ testColumn <- function (colname, values) {
 }
 
 #' @export
-testStudy <- function (study) testColumn ('Study', study);
+testStudy <- function (study) testColumn ('Study', toupper(study));
 
 #' @export
 testGene <- function (genes) testColumn ('HGNC_gene_symbol', genes);
