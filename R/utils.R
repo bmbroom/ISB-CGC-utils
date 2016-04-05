@@ -1,4 +1,7 @@
 
+#' @import bigrquery
+NULL
+
 getCloudProject <- function() {
    getOption('cloudproject')
 }
