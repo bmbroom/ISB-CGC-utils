@@ -71,6 +71,21 @@ getGeneSymbols <- function() {
 }
 
 #' @export
+getReferenceGenes <- function(authority) {
+  authtest <- if (length(authority)==0) "" else { paste ("AND", testColumn('authority',authority), sep=" ") };
+  querySql <- sprintf ("
+    SELECT
+      symbol
+    FROM
+      [ngchm-cloud-pilot:reference.allonco]
+    WHERE
+      ( symbol IS NOT NULL %s )
+  ", authtest);
+  
+  query_exec(querySql, project=getCloudProject())$symbol
+}
+
+#' @export
 getBadGeneSymbols <- function() {
   querySql <- sprintf ("
     SELECT
