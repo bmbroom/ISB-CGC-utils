@@ -1,5 +1,6 @@
 
 #' @import bigrquery
+#' @import NGCHM
 NULL
 
 getCloudProject <- function() {
@@ -136,4 +137,9 @@ exprCHM <- function (name, cohort, genes) {
     chmInstall (chm);
     getOption('viewer')(chmGetURL(chm));
     chm
+}
+
+#' @export
+demoCHM <- function() {
+    exprCHM ('bmbroom-isb-demo', getStudyCohort('prad'), getReferenceGenes('Vogelstein'))
 }
