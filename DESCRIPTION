@@ -1,0 +1,13 @@
+Package: ISBCHM
+Type: Package
+Title: Utilities for Creating NG-CHMs using the ISB CGC
+Version: 0.0.2
+Date: 2016-04-05
+Author: Bradley Broom
+Maintainer: Bradley Broom <bmbroom@mdanderson.org>
+Imports:
+    NGCHM
+Description: Utilities for Creating NG-CHMs using the ISB CGC.
+License: GPL-3
+Collate:
+    'utils.R'
