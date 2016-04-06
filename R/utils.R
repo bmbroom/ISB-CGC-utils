@@ -124,7 +124,8 @@ exprCHM <- function (name, cohort, genes) {
     chm <- chmAddAxisType (chm, 'row', 'bio.gene.hugo');
     chmMake (chm);
     chmInstall (chm);
-    getOption('viewer')(chmGetURL(chm));
+    v <- getOption('viewer');
+    if (!is.null(v)) v(chmGetURL(chm));
     chm
 }
 
