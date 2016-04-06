@@ -4,12 +4,12 @@ getCloudProject <- function() {
 }
 
 #' @export
-cloudServer <- function (name, intAddr, extAddr, ...) {
+cloudServer <- function (name, intAddr, extAddr, chmPort=80, managerPort=18080, ...) {
     chmCreateServer (name,
-                     sprintf ("http://%s:8080/chm", intAddr),
+                     sprintf ("http://%s:%d/chm", intAddr, chmPort),
                      list (serverProtocol="manager",
-                           deployServer=sprintf("http://%s:18080/chm/manager/rest", intAddr),
+                           deployServer=sprintf("http://%s:%d/chm/manager/rest", intAddr, managerPort),
                            serviceName="default",
-                           viewServer=sprintf("http://%s:8080/chm", extAddr),
+                           viewServer=sprintf("http://%s:%d/chm", extAddr, chmPort),
                            ...))
 }
