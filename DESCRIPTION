@@ -10,4 +10,6 @@ Imports:
 Description: Utilities for Creating NG-CHMs using the ISB CGC.
 License: GPL-3
 Collate:
+    'cloud.R'
     'utils.R'
+    'zzz.R'

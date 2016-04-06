@@ -3,19 +3,6 @@
 #' @import NGCHM
 NULL
 
-getCloudProject <- function() {
-   getOption('cloudproject')
-}
-
-.onAttach <- function(libname, pkgname) {
-   proj <- getCloudProject();
-   if (length(proj)==0) {
-       cat ("Option cloudproject is not set\n");
-   } else {
-       cat ("Option cloudproject is ", proj, "\n");
-   }
-}
-
 # ISB-CGC tables of interest
 ISB.clinicTable <- "[isb-cgc:tcga_201510_alpha.Clinical_data]";
 ISB.rnaTable <- "[isb-cgc:tcga_201510_alpha.mRNA_UNC_HiSeq_RSEM]";
@@ -51,6 +38,8 @@ getStudyCohort <- function(study) {
   query_exec(querySql, project=getCloudProject())$ParticipantBarcode
 }
 
+
+
 #' @export
 getGeneSymbols <- function() {
   querySql <- sprintf ("
@@ -67,7 +56,7 @@ getGeneSymbols <- function() {
       original_gene_symbol, HGNC_gene_symbol, gene_id
     ORDER BY
       HGNC_gene_symbol", ISB.rnaTable);
-  
+
   query_exec(querySql, project=getCloudProject())
 }
 
@@ -82,7 +71,7 @@ getReferenceGenes <- function(authority) {
     WHERE
       ( symbol IS NOT NULL %s )
   ", authtest);
-  
+
   query_exec(querySql, project=getCloudProject())$symbol
 }
 
@@ -102,7 +91,7 @@ getBadGeneSymbols <- function() {
       original_gene_symbol, HGNC_gene_symbol, gene_id
     ORDER BY
       HGNC_gene_symbol", ISB.rnaTable);
-  
+
   query_exec(querySql, project = getCloudProject())
 }
 
@@ -116,7 +105,7 @@ getExpressionData <- function (cohort, genes) {
     WHERE (%s AND %s)
   ", ISB.rnaTable, testGene(genes), testParticipant(cohort));
   qres <- query_exec(querySql, max_pages=Inf, project = getCloudProject());
-  
+
   samples <- unique(qres$AliquotBarCode)
   genes <- unique(qres$HGNC_gene_symbol)
   dm <- matrix(NA, nrow=length(genes), ncol=length(samples))
