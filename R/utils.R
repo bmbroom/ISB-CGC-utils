@@ -133,3 +133,10 @@ exprCHM <- function (name, cohort, genes) {
 demoCHM <- function() {
     exprCHM ('bmbroom-isb-demo', getStudyCohort('prad'), getReferenceGenes('Vogelstein'))
 }
+
+#' @export
+plot.ngchmVersion2 <- function(chm) {
+    v <- getOption('viewer');
+    if (is.null(v)) v <- browseURL;
+    v(chmGetURL(chm))
+}
