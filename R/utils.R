@@ -95,6 +95,14 @@ getBadGeneSymbols <- function() {
   query_exec(querySql, project = getCloudProject())
 }
 
+#' Get gene expression data from the ISB CGC cloud
+#'
+#' This function downloads gene expression data from the ISB CGC cloud as
+#' a gene by sample matrix.  The data will be transformed using ASINH.
+#'
+#' @param cohort Include samples from the specified vector of participant ids.
+#' @param genes Include genes from the specified vector of HGNC symbols.
+#' @return A numeric matrix of genes (rows) by samples (columns).
 #' @export
 getExpressionData <- function (cohort, genes) {
   querySql <- sprintf ("
@@ -115,7 +123,20 @@ getExpressionData <- function (cohort, genes) {
   dm
 }
 
+#' Create a canned NG-CHM from ISB CGC cloud data
+#'
+#' This function creates a canned gene expression NG-CHM for the given participant cohort and gene list using data
+#' from the ISB CGC cloud pilot.  If the 'viewer' option is defined, it will be used to display the NG-CHM.
+#' The generated NG-CHM will contain three layers: row-centered, Z-normalized, and original.
+#'
+#' @param name Name the generated NG-CHM 'name'.
+#' @param cohort Include samples from the specified vector of participant ids.
+#' @param genes Include genes from the specified vector of HGNC symbols.
+#' @return The generated NG-CHM
 #' @export
+#'
+#' @seealso getExpressionData
+#' @seealso demoCHM
 exprCHM <- function (name, cohort, genes) {
     data <- getExpressionData (cohort, genes);
     cent <- data - apply (data, 1, function(x)mean(x,na.rm=TRUE));
@@ -129,9 +150,20 @@ exprCHM <- function (name, cohort, genes) {
     chm
 }
 
+#' Create a canned NG-CHM from ISB CGC cloud data
+#'
+#' This function creates a canned gene expression NG-CHM for the given study and gene authority using data
+#' from the ISB CGC cloud pilot.  If the 'viewer' option is defined, it will be used to display the NG-CHM.
+#'
+#' @param study Include samples from the specified study (or studies).
+#' @param authority Include genes deemed 'cancer interesting' by the specified authority (or authorities).
+#' @return The generated NG-CHM
 #' @export
-demoCHM <- function() {
-    exprCHM ('bmbroom-isb-demo', getStudyCohort('prad'), getReferenceGenes('Vogelstein'))
+#'
+#' @seealso exprCHM
+demoCHM <- function(study='prad', authority='Vogelstein') {
+    exprCHM (sprintf ('mrna-%s-%s', paste(study,collapse='+'), paste(authority,collapse='+')),
+             getStudyCohort(study), getReferenceGenes(authority))
 }
 
 #' @export
