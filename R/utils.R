@@ -141,7 +141,7 @@ getExpressionData <- function (cohort, genes) {
 exprCHM <- function (name, cohort, genes, caption=NULL) {
     data <- getExpressionData (cohort, genes);
     cent <- data - apply (data, 1, function(x)mean(x,na.rm=TRUE));
-    norm <- data / apply (cent, 1, function(x)sd(x,na.rm=TRUE));
+    norm <- cent / apply (cent, 1, function(x)sd(x,na.rm=TRUE));
     chm <- chmNew (name, cent, norm, data);
     chm <- chmAddAxisType (chm, 'row', 'bio.gene.hugo');
     if (!is.null(caption)) {
