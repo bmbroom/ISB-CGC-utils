@@ -132,17 +132,21 @@ getExpressionData <- function (cohort, genes) {
 #' @param name Name the generated NG-CHM 'name'.
 #' @param cohort Include samples from the specified vector of participant ids.
 #' @param genes Include genes from the specified vector of HGNC symbols.
+#' @param caption An informative caption
 #' @return The generated NG-CHM
 #' @export
 #'
 #' @seealso getExpressionData
 #' @seealso demoCHM
-exprCHM <- function (name, cohort, genes) {
+exprCHM <- function (name, cohort, genes, caption=NULL) {
     data <- getExpressionData (cohort, genes);
     cent <- data - apply (data, 1, function(x)mean(x,na.rm=TRUE));
     norm <- data / apply (cent, 1, function(x)sd(x,na.rm=TRUE));
     chm <- chmNew (name, cent, norm, data);
     chm <- chmAddAxisType (chm, 'row', 'bio.gene.hugo');
+    if (!is.null(caption)) {
+        chm <- chmAddProperty (chm, 'chm.info.caption', caption);
+    }
     chmMake (chm);
     chmInstall (chm);
     v <- getOption('viewer');
@@ -163,7 +167,8 @@ exprCHM <- function (name, cohort, genes) {
 #' @seealso exprCHM
 demoCHM <- function(study='prad', authority='Vogelstein') {
     exprCHM (sprintf ('mrna-%s-%s', paste(study,collapse='+'), paste(authority,collapse='+')),
-             getStudyCohort(study), getReferenceGenes(authority))
+             getStudyCohort(study), getReferenceGenes(authority),
+             caption=sprintf ('mRNA expression data for TCGA study(s) %s', paste(study,collapse=' and ')))
 }
 
 #' @export
