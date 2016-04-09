@@ -170,10 +170,3 @@ demoCHM <- function(study='prad', authority='Vogelstein') {
              getStudyCohort(study), getReferenceGenes(authority),
              caption=sprintf ('mRNA expression data for TCGA study(s) %s', paste(study,collapse=' and ')))
 }
-
-#' @export
-plot.ngchmVersion2 <- function(chm) {
-    v <- getOption('viewer');
-    if (is.null(v)) v <- browseURL;
-    v(chmGetURL(chm))
-}
