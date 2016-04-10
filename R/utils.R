@@ -106,6 +106,8 @@ getBadGeneSymbols <- function() {
 #' @import digest
 #' @export
 getExpressionData <- function (cohort, genes) {
+  cohort <- sort(cohort);
+  genes <- sort(genes);
   querySql <- sprintf ("
     SELECT
       HGNC_gene_symbol, gene_id, ParticipantBarCode, AliquotBarCode,
@@ -132,6 +134,74 @@ getExpressionData <- function (cohort, genes) {
       if (useCache) save (dm, file=filename);
   }
   dm
+}
+
+#' Get the specified columns from the clinical data for the specified cohort
+#'
+#' @param cohort Include samples from the specified vector of participant ids.
+#' @param columns Include columns from the specified vector of clinical table column names.
+#' @return A list of column vectors.
+#' @export
+getClinicalData <- function (cohort, columns) {
+  cohort <- sort(unique(cohort));
+  result <- list();
+  useCache <- getOption ("usecache", TRUE);
+
+  if (useCache) {
+      for (column in columns) {
+          filename <- file.path ("data", sprintf ("cc%s", digest::digest(list(ISB.clinicTable,cohort,column))));
+	  if (file.exists(filename)) {
+	      ee <- new.env();
+	      id <- load (filename, ee);
+	      result[[column]] <- ee[[id]];
+          }
+      }
+  }
+  columns <- setdiff (columns, names(result));
+  if (length(columns) > 0) {
+      querySql <- sprintf ("
+        SELECT
+          ParticipantBarCode,
+          %s
+        FROM %s
+        WHERE (%s)
+      ", paste(columns,collapse=","), ISB.clinicTable, testParticipant(cohort));
+      qres <- query_exec(querySql, max_pages=Inf, project = getCloudProject());
+      samples <- unique(qres$ParticipantBarCode);
+      for (column in columns) {
+          filename <- file.path ("data", sprintf ("cc%s", digest::digest(list(ISB.clinicTable,cohort,column))));
+          val <- rep(NA,length(cohort));
+          names(val) <- cohort;
+          val[qres$ParticipantBarCode] <- qres[[column]];
+          if (useCache) save (val, file=filename);
+          result[[column]] <- val;
+      }
+  }
+  result
+}
+
+#' @export
+createClinicalCovariate <- function (clinicTable, chm, fullname, column, ...) {
+    colLabels <- ngchmGetLabelsStr (chm@layers[[1]]@data,"column");
+    vals <- clinicTable[[column]][substr(colLabels,1,12)];
+    names(vals) <- colLabels;
+    chmNewCovariate(fullname, vals, ...)
+}
+
+#' @export
+covariates <- matrix (c(
+    'Vital status', 'vital_status',
+    'Followup (days)', 'days_to_last_followup'
+), byrow=TRUE, ncol=2);
+colnames(covariates) <- c("fullName", "columnName");
+
+#' @export
+addClinicalCovariates <- function (chm, cohort) {
+    clinicTab <- getClinicalData (cohort, covariates[,'columnName']);
+    cvs <- lapply (1:nrow(covariates), function(row) {
+        createClinicalCovariate (clinicTab, chm, covariates[row,'fullName'], covariates[row,'columnName'])
+    });
+    chm + (chmAxis('col') + cvs)
 }
 
 #' Create a canned NG-CHM from ISB CGC cloud data
@@ -163,10 +233,12 @@ exprCHM <- function (name, cohort, genes, caption=NULL, cbioStudy=NULL) {
     if (!is.null(cbioStudy)) {
         chm <- tcgaAddCBIOStudyId (chm, cbioStudy);
     }
-    chmMake (chm);
-    chmInstall (chm);
-    v <- getOption('viewer');
-    if (!is.null(v)) v(chmGetURL(chm));
+    chm <- addClinicalCovariates (chm, cohort);
+    if (length(chmListServers()) > 0) {
+        chmMake (chm);
+        chmInstall (chm);
+        plot(chm);
+    }
     chm
 }
 
@@ -184,6 +256,7 @@ exprCHM <- function (name, cohort, genes, caption=NULL, cbioStudy=NULL) {
 demoCHM <- function(study='prad', authority='Vogelstein') {
     exprCHM (sprintf ('mrna-%s-%s', paste(study,collapse='+'), paste(authority,collapse='+')),
              getStudyCohort(study), getReferenceGenes(authority),
-             caption=sprintf ('mRNA expression data for TCGA study(s) %s', paste(study,collapse=' and ')),
+             caption=sprintf ('mRNA expression data for TCGA study(s) %s', paste(study,collapse=' and '),
+                              ' using genes defined by ', paste(authority,collapse=' and '), '.'),
              cbioStudy=if(length(study)==1)sprintf ('%s_tcga',study)else NULL)
 }
