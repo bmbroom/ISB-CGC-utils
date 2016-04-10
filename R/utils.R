@@ -103,6 +103,7 @@ getBadGeneSymbols <- function() {
 #' @param cohort Include samples from the specified vector of participant ids.
 #' @param genes Include genes from the specified vector of HGNC symbols.
 #' @return A numeric matrix of genes (rows) by samples (columns).
+#' @import digest
 #' @export
 getExpressionData <- function (cohort, genes) {
   querySql <- sprintf ("
@@ -112,14 +113,24 @@ getExpressionData <- function (cohort, genes) {
     FROM %s
     WHERE (%s AND %s)
   ", ISB.rnaTable, testGene(genes), testParticipant(cohort));
-  qres <- query_exec(querySql, max_pages=Inf, project = getCloudProject());
 
-  samples <- unique(qres$AliquotBarCode)
-  genes <- unique(qres$HGNC_gene_symbol)
-  dm <- matrix(NA, nrow=length(genes), ncol=length(samples))
-  rownames(dm) <- genes
-  colnames(dm) <- samples
-  dm[cbind(qres$HGNC_gene_symbol,qres$AliquotBarCode)] <- qres$expression;
+  filename <- file.path ("data", sprintf ("q%s", digest::digest(querySql)));
+  useCache <- getOption ("usecache", TRUE);
+  if (useCache && file.exists(filename)) {
+      ee <- new.env();
+      id <- load (filename, ee);
+      dm <- ee[[id]];
+  } else {
+      qres <- query_exec(querySql, max_pages=Inf, project = getCloudProject());
+
+      samples <- unique(qres$AliquotBarCode)
+      genes <- unique(qres$HGNC_gene_symbol)
+      dm <- matrix(NA, nrow=length(genes), ncol=length(samples))
+      rownames(dm) <- genes
+      colnames(dm) <- samples
+      dm[cbind(qres$HGNC_gene_symbol,qres$AliquotBarCode)] <- qres$expression;
+      if (useCache) save (dm, file=filename);
+  }
   dm
 }
 
