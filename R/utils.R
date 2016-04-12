@@ -1,6 +1,7 @@
 
 #' @import bigrquery
 #' @import NGCHM
+#' @import magrittr
 NULL
 
 # ISB-CGC tables of interest
@@ -189,18 +190,30 @@ createClinicalCovariate <- function (clinicTable, chm, fullname, column, ...) {
 }
 
 #' @export
-covariates <- matrix (c(
-    'Vital status', 'vital_status',
-    'Followup (days)', 'days_to_last_followup'
-), byrow=TRUE, ncol=2);
-colnames(covariates) <- c("fullName", "columnName");
+covariates <- rbind(
+    list ('Vital status', 'vital_status', NULL),
+    list ('Followup (days)', 'days_to_last_followup', NULL),
+    list ('PSA', 'psa_value', 'prad'));
+colnames(covariates) <- c("fullName", "columnName", "studies");
 
+#' Add clinical coveriates to chm
+#'
+#' @param chm NG-CHM
+#' @param study The TCGA study identifier(s) of the data samples
+#' @param cohort The participant identifiers included in the NGCHM
+#'
 #' @export
-addClinicalCovariates <- function (chm, cohort) {
+addClinicalCovariates <- function (chm, study, cohort) {
     clinicTab <- getClinicalData (cohort, covariates[,'columnName']);
-    cvs <- lapply (1:nrow(covariates), function(row) {
-        createClinicalCovariate (clinicTab, chm, covariates[row,'fullName'], covariates[row,'columnName'])
-    });
+    study <- tolower(study);
+    cvs <- 1:nrow(covariates) %>%
+           Filter (function(row) {
+               okstudies <- covariates[row,]$studies;
+               is.null(okstudies) || all(vapply(study,function(s)s %in% okstudies,TRUE))
+           },.) %>%
+           lapply (function(row) {
+               createClinicalCovariate (clinicTab, chm, covariates[row,]$fullName, covariates[row,]$columnName)
+           });
     chm + (chmAxis('col') + cvs)
 }
 
@@ -211,29 +224,29 @@ addClinicalCovariates <- function (chm, cohort) {
 #' The generated NG-CHM will contain three layers: row-centered, Z-normalized, and original.
 #'
 #' @param name Name the generated NG-CHM 'name'.
+#' @param study TCGA study(s) of the data samples
 #' @param cohort Include samples from the specified vector of participant ids.
 #' @param genes Include genes from the specified vector of HGNC symbols.
 #' @param caption An informative caption
-#' @param cbioStudy cBio study identifier to use for cBio linkouts
 #' @return The generated NG-CHM
 #' @export
 #'
 #' @seealso getExpressionData
 #' @seealso demoCHM
-exprCHM <- function (name, cohort, genes, caption=NULL, cbioStudy=NULL) {
+exprCHM <- function (name, study, cohort, genes, caption=NULL) {
     data <- getExpressionData (cohort, genes);
     cent <- data - apply (data, 1, function(x)mean(x,na.rm=TRUE));
     norm <- cent / apply (cent, 1, function(x)sd(x,na.rm=TRUE));
-    chm <- chmNew (name, cent, norm, data);
-    chm <- chmAddAxisType (chm, 'row', 'bio.gene.hugo');
-    chm <- chmAddAxisType (chm, 'column', tcgaBarcodeType(colnames(data)[1]));
+    chm <- chmNew (name, cent, norm, data) %>%
+           chmAddAxisType ('row', 'bio.gene.hugo') %>%
+           chmAddAxisType ('column', tcgaBarcodeType(colnames(data)[1]));
     if (!is.null(caption)) {
         chm <- chmAddProperty (chm, 'chm.info.caption', caption);
     }
-    if (!is.null(cbioStudy)) {
-        chm <- tcgaAddCBIOStudyId (chm, cbioStudy);
+    if (length(study)==1) {
+        chm <- tcgaAddCBIOStudyId (chm, sprintf ('%s_tcga',study));
     }
-    chm <- addClinicalCovariates (chm, cohort);
+    chm <- addClinicalCovariates (chm, study, cohort);
     if (length(chmListServers()) > 0) {
         chmMake (chm);
         chmInstall (chm);
@@ -255,8 +268,7 @@ exprCHM <- function (name, cohort, genes, caption=NULL, cbioStudy=NULL) {
 #' @seealso exprCHM
 demoCHM <- function(study='prad', authority='Vogelstein') {
     exprCHM (sprintf ('mrna-%s-%s', paste(study,collapse='+'), paste(authority,collapse='+')),
-             getStudyCohort(study), getReferenceGenes(authority),
-             caption=sprintf ('mRNA expression data for TCGA study(s) %s', paste(study,collapse=' and '),
-                              ' using genes defined by ', paste(authority,collapse=' and '), '.'),
-             cbioStudy=if(length(study)==1)sprintf ('%s_tcga',study)else NULL)
+             study, getStudyCohort(study), getReferenceGenes(authority),
+             caption=sprintf ('mRNA expression data for TCGA study(s) %s using genes defined by %s.', paste(study,collapse=' and '),
+                              paste(authority,collapse=' and ')))
 }

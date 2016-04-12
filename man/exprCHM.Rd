@@ -4,18 +4,18 @@
 \alias{exprCHM}
 \title{Create a canned NG-CHM from ISB CGC cloud data}
 \usage{
-exprCHM(name, cohort, genes, caption = NULL, cbioStudy = NULL)
+exprCHM(name, study, cohort, genes, caption = NULL)
 }
 \arguments{
 \item{name}{Name the generated NG-CHM 'name'.}
+
+\item{study}{TCGA study(s) of the data samples}
 
 \item{cohort}{Include samples from the specified vector of participant ids.}
 
 \item{genes}{Include genes from the specified vector of HGNC symbols.}
 
 \item{caption}{An informative caption}
-
-\item{cbioStudy}{cBio study identifier to use for cBio linkouts}
 }
 \value{
 The generated NG-CHM
