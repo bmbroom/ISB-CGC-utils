@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{addClinicalCovariates}
 \alias{addClinicalCovariates}
-\title{Add clinical coveriates to chm}
+\title{Add clinical covariates to chm}
 \usage{
 addClinicalCovariates(chm, study, cohort)
 }
@@ -14,6 +14,6 @@ addClinicalCovariates(chm, study, cohort)
 \item{cohort}{The participant identifiers included in the NGCHM}
 }
 \description{
-Add clinical coveriates to chm
+Add clinical covariates to chm
 }
 

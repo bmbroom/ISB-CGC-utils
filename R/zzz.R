@@ -6,5 +6,6 @@
    } else {
        cat ("Option cloudproject is ", proj, "\n");
    }
+   initClinicalCovariates();
 }
 

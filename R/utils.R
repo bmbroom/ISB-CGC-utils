@@ -189,14 +189,67 @@ createClinicalCovariate <- function (clinicTable, chm, fullname, column, ...) {
     chmNewCovariate(fullname, vals, ...)
 }
 
-#' @export
-covariates <- rbind(
-    list ('Vital status', 'vital_status', NULL),
-    list ('Followup (days)', 'days_to_last_followup', NULL),
-    list ('PSA', 'psa_value', 'prad'));
-colnames(covariates) <- c("fullName", "columnName", "studies");
+isb.env <- new.env();
+covariates.file <- file.path ("data", "clinical-covariates.Rda");
 
-#' Add clinical coveriates to chm
+initClinicalCovariates <- function() {
+    if (file.exists (covariates.file)) {
+	ee <- new.env();
+	load (covariates.file, ee);
+	isb.env$covariates <- ee$covariates;
+    } else {
+	isb.env$covariates <- rbind(
+	    list ('Vital status', 'vital_status', NULL),
+	    list ('Followup (days)', 'days_to_last_followup', NULL),
+	    list ('PSA', 'psa_value', 'prad'));
+	colnames(isb.env$covariates) <- c("fullName", "columnName", "studies");
+    }
+}
+
+#'  Define a clinical covariate for use in NGCHMs
+#'
+#' @param fullName Display name of covariate
+#' @param columnName Name of covariate in ISB CGC clinical table
+#' @param studies Vector of TCGA studies for which covariate is valid. NULL (default) is valid for all.
+#'
+#' @export
+#' @seealso removeClinicalCovariate
+defineClinicalCovariate <- function (fullName, columnName, studies) {
+    if (missing(studies)) studies <- NULL;
+    newVal <- list(fullName, columnName, studies);
+    if (columnName %in% isb.env$covariates[,'columnName']) {
+        isb.env$covariates[which(columnName==isb.env$covariates[,'columnName']),] <- newVal;
+    } else {
+        isb.env$covariates <- rbind (isb.env$covariates, newVal);
+    }
+    with (isb.env, save (covariates, file=covariates.file))
+}
+
+#'  Remove a clinical covariate definition
+#'
+#' @param name Name of covariate to remove
+#'
+#' @export
+#' @seealso defineClinicalCovariate
+removeClinicalCovariate <- function (name) {
+    if (name %in% isb.env$covariates[,'columnName']) {
+        idx <- which(name==isb.env$covariates[,'columnName']);
+        if (name %in% isb.env$covariates[,'fullName']) {
+            idx2 <- which(name==isb.env$covariates[,'fullName']);
+            if (idx != idx2) {
+                stop (sprintf ('Covariate "%s" is ambiguous', name))
+            }
+        }
+    } else if (name %in% isb.env$covariates[,'fullName']) {
+        idx <- which(name==isb.env$covariates[,'fullName']);
+    } else {
+        stop (sprintf ('Unknown covariate "%s"', name))
+    }
+    isb.env$covariates <- isb.env$covariates[-idx,];
+    with (isb.env, save (covariates, file=covariates.file))
+}
+
+#' Add clinical covariates to chm
 #'
 #' @param chm NG-CHM
 #' @param study The TCGA study identifier(s) of the data samples
@@ -204,15 +257,15 @@ colnames(covariates) <- c("fullName", "columnName", "studies");
 #'
 #' @export
 addClinicalCovariates <- function (chm, study, cohort) {
-    clinicTab <- getClinicalData (cohort, covariates[,'columnName']);
+    clinicTab <- getClinicalData (cohort, isb.env$covariates[,'columnName']);
     study <- tolower(study);
-    cvs <- 1:nrow(covariates) %>%
+    cvs <- 1:nrow(isb.env$covariates) %>%
            Filter (function(row) {
-               okstudies <- covariates[row,]$studies;
+               okstudies <- isb.env$covariates[row,]$studies;
                is.null(okstudies) || all(vapply(study,function(s)s %in% okstudies,TRUE))
            },.) %>%
            lapply (function(row) {
-               createClinicalCovariate (clinicTab, chm, covariates[row,]$fullName, covariates[row,]$columnName)
+               createClinicalCovariate (clinicTab, chm, isb.env$covariates[row,]$fullName, isb.env$covariates[row,]$columnName)
            });
     chm + (chmAxis('col') + cvs)
 }
