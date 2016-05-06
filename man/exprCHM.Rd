@@ -4,7 +4,7 @@
 \alias{exprCHM}
 \title{Create a canned NG-CHM from ISB CGC cloud data}
 \usage{
-exprCHM(name, study, cohort, genes, caption = NULL)
+exprCHM(name, study, cohort, genes, caption)
 }
 \arguments{
 \item{name}{Name the generated NG-CHM 'name'.}

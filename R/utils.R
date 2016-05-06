@@ -7,6 +7,7 @@ NULL
 # ISB-CGC tables of interest
 ISB.clinicTable <- "[isb-cgc:tcga_201510_alpha.Clinical_data]";
 ISB.rnaTable <- "[isb-cgc:tcga_201510_alpha.mRNA_UNC_HiSeq_RSEM]";
+ISB.mutationTable <- "[isb-cgc:tcga_201510_alpha.Somatic_Mutation_calls]";
 
 #' @export
 asSqlList <- function (items) {
@@ -29,6 +30,9 @@ testStudy <- function (study) testColumn ('Study', toupper(study));
 
 #' @export
 testGene <- function (genes) testColumn ('HGNC_gene_symbol', genes);
+
+#' @export
+testHugoSymbol <- function (genes) testColumn ('Hugo_Symbol', genes);
 
 #' @export
 testParticipant <- function (partids) testColumn ('ParticipantBarCode', partids);
@@ -181,6 +185,70 @@ getClinicalData <- function (cohort, columns) {
   result
 }
 
+#' Get mutation data.
+#'
+#' @param cohort Include samples from the specified vector of participant ids.
+#' @param genes Include mutations in the specified vector of Hugo_Symbols.
+#' @return A list of column vectors.
+#' @export
+getMutationData <- function (cohort, genes) {
+  cohort <- sort(unique(cohort));
+  result <- list();
+  useCache <- getOption ("usecache", TRUE);
+
+  if (useCache) {
+      for (gene in genes) {
+          filename <- file.path ("data", sprintf ("mu%s", digest::digest(list(ISB.mutationTable,cohort,gene))));
+	  if (file.exists(filename)) {
+	      ee <- new.env();
+	      id <- load (filename, ee);
+	      result[[gene]] <- ee[[id]];
+          }
+      }
+  }
+  genes <- setdiff (genes, names(result));
+  if (length(genes) > 0) {
+      querySql <- sprintf ("
+        SELECT
+          ParticipantBarCode,
+          Hugo_Symbol,
+          Variant_Classification
+        FROM %s
+        WHERE (%s AND %s)
+      ", ISB.mutationTable, testHugoSymbol(genes), testParticipant(cohort));
+      qres <- query_exec(querySql, max_pages=Inf, project = getCloudProject());
+      samples <- unique(qres$ParticipantBarCode);
+      for (gene in genes) {
+          filename <- file.path ("data", sprintf ("mu%s", digest::digest(list(ISB.mutationTable,cohort,gene))));
+          val <- rep(NA,length(cohort));
+          names(val) <- cohort;
+          selected <- which(qres$Hugo_Symbol==gene);
+          val[qres$ParticipantBarCode[selected]] <- qres$Variant_Classification[selected];
+          if (useCache) save (val, file=filename);
+          result[[gene]] <- val;
+      }
+  }
+  result
+}
+
+isb.env <- new.env();
+	isb.env$mutationTypes <- rbind(
+	    list ('Splice_Site', 'red'),
+	    list ('Missense_Mutation', 'green'),
+	    list ('Frame_Shift_Ins', 'black'),
+	    list ('Frame_Shift_Del', 'blue'));
+	colnames(isb.env$mutationTypes) <- c("values", "colors");
+
+mutColorMap <- chmNewColorMap (unlist(isb.env$mutationTypes[,'values']), unlist(isb.env$mutationTypes[,'colors']));
+
+#' @export
+createMutationCovariate <- function (mutationTable, chm, gene, ...) {
+    colLabels <- ngchmGetLabelsStr (chm@layers[[1]]@data,"column");
+    vals <- mutationTable[[gene]][substr(colLabels,1,12)];
+    names(vals) <- colLabels;
+    chmNewCovariate(gene, vals, mutColorMap, ...)
+}
+
 #' @export
 createClinicalCovariate <- function (clinicTable, chm, fullname, column, ...) {
     colLabels <- ngchmGetLabelsStr (chm@layers[[1]]@data,"column");
@@ -189,8 +257,8 @@ createClinicalCovariate <- function (clinicTable, chm, fullname, column, ...) {
     chmNewCovariate(fullname, vals, ...)
 }
 
-isb.env <- new.env();
 covariates.file <- file.path ("data", "clinical-covariates.Rda");
+mutations.file <- file.path ("data", "mutation-covariates.Rda");
 
 initClinicalCovariates <- function() {
     if (file.exists (covariates.file)) {
@@ -203,6 +271,21 @@ initClinicalCovariates <- function() {
 	    list ('Followup (days)', 'days_to_last_followup', NULL),
 	    list ('PSA', 'psa_value', 'prad'));
 	colnames(isb.env$covariates) <- c("fullName", "columnName", "studies");
+    }
+}
+
+initMutationCovariates <- function() {
+    if (file.exists (mutations.file)) {
+	ee <- new.env();
+	load (mutations.file, ee);
+	isb.env$mutations <- ee$mutations;
+    } else {
+	isb.env$mutations <- rbind(
+	    list ('TP53', NULL),
+	    list ('RB1', NULL),
+	    list ('PTEN', NULL)
+	    );
+	colnames(isb.env$mutations) <- c("gene", "studies");
     }
 }
 
@@ -257,6 +340,13 @@ removeClinicalCovariate <- function (name) {
 #'
 #' @export
 addClinicalCovariates <- function (chm, study, cohort) {
+    if (missing (study)) {
+        stopifnot (chmHasProperty (chm, 'study'));
+        study <- chmGetProperty (chm, 'study');
+    }
+    if (missing (cohort)) {
+        cohort <- unique (substr (1, 12, colnames (chm)));
+    }
     clinicTab <- getClinicalData (cohort, isb.env$covariates[,'columnName']);
     study <- tolower(study);
     cvs <- 1:nrow(isb.env$covariates) %>%
@@ -266,6 +356,34 @@ addClinicalCovariates <- function (chm, study, cohort) {
            },.) %>%
            lapply (function(row) {
                createClinicalCovariate (clinicTab, chm, isb.env$covariates[row,]$fullName, isb.env$covariates[row,]$columnName)
+           });
+    chm + (chmAxis('col') + cvs)
+}
+
+#' Add mutation covariates to chm
+#'
+#' @param chm NG-CHM
+#' @param study The TCGA study identifier(s) of the data samples
+#' @param cohort The participant identifiers included in the NGCHM
+#'
+#' @export
+addMutationCovariates <- function (chm, study, cohort) {
+    if (missing (study)) {
+        stopifnot (chmHasProperty (chm, 'study'));
+        study <- chmGetProperty (chm, 'study');
+    }
+    if (missing (cohort)) {
+        cohort <- unique (substr (1, 12, colnames (chm)));
+    }
+    mutationTab <- getMutationData (cohort, isb.env$mutations[,'gene']);
+    study <- tolower(study);
+    cvs <- 1:nrow(isb.env$mutations) %>%
+           Filter (function(row) {
+               okstudies <- isb.env$mutations[row,]$studies;
+               is.null(okstudies) || all(vapply(study,function(s)s %in% okstudies,TRUE))
+           },.) %>%
+           lapply (function(row) {
+               createMutationCovariate (mutationTab, chm, isb.env$mutations[row,]$gene)
            });
     chm + (chmAxis('col') + cvs)
 }
@@ -286,20 +404,22 @@ addClinicalCovariates <- function (chm, study, cohort) {
 #'
 #' @seealso getExpressionData
 #' @seealso demoCHM
-exprCHM <- function (name, study, cohort, genes, caption=NULL) {
+exprCHM <- function (name, study, cohort, genes, caption) {
     data <- getExpressionData (cohort, genes);
     cent <- data - apply (data, 1, function(x)mean(x,na.rm=TRUE));
     norm <- cent / apply (cent, 1, function(x)sd(x,na.rm=TRUE));
     chm <- chmNew (name, cent, norm, data) %>%
            chmAddAxisType ('row', 'bio.gene.hugo') %>%
            chmAddAxisType ('column', tcgaBarcodeType(colnames(data)[1]));
-    if (!is.null(caption)) {
-        chm <- chmAddProperty (chm, 'chm.info.caption', caption);
+    if (!missing(caption)) {
+        chm <- chm %>% chmAddProperty ('chm.info.caption', caption);
     }
     if (length(study)==1) {
-        chm <- tcgaAddCBIOStudyId (chm, sprintf ('%s_tcga',study));
+        chm <- chm %>%
+            chmAddProperty ('study', study) %>%
+            tcgaAddCBIOStudyId (sprintf ('%s_tcga',study));
     }
-    chm <- addClinicalCovariates (chm, study, cohort);
+    chm <- chm %>% addClinicalCovariates (study, cohort) %>% addMutationCovariates (study, cohort);
     if (length(chmListServers()) > 0) {
         chmMake (chm);
         chmInstall (chm);

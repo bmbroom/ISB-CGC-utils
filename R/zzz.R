@@ -7,5 +7,6 @@
        cat ("Option cloudproject is ", proj, "\n");
    }
    initClinicalCovariates();
+   initMutationCovariates();
 }
 
