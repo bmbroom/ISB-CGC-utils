@@ -16,13 +16,26 @@ asSqlList <- function (items) {
 
 #' @export
 testColumn <- function (colname, values) {
-    stopifnot (length(values) > 0);
-    paste ("(",
-           colname,
-           if (length(values)==1) "=" else " IN (",
-           asSqlList (values),
-           if (length(values)==1) "" else ")",
-           ")", sep="")
+    if (length(values) == 0) {
+        ""
+    } else {
+        paste ("(",
+               colname,
+               if (length(values)==1) "=" else " IN (",
+               asSqlList (values),
+               if (length(values)==1) "" else ")",
+               ")", sep="")
+    }
+}
+
+genWhereClause <- function (...) {
+  tests <- Filter (function(x)!is.null(x) && x != "", list(...));
+  if (length( tests ) == 0 ) {
+    return ("");
+  }
+  paste0 ("WHERE (",
+          paste (sprintf ("(%s)", tests), collapse=' AND '),
+          ")")
 }
 
 #' @export
@@ -39,7 +52,7 @@ testParticipant <- function (partids) testColumn ('ParticipantBarCode', partids)
 
 #' @export
 getStudyCohort <- function(study) {
-  querySql <- sprintf ("SELECT ParticipantBarcode FROM %s WHERE %s", ISB.clinicTable, testStudy(study));
+  querySql <- sprintf ("SELECT ParticipantBarcode FROM %s %s", ISB.clinicTable, genWhereClause (testStudy(study)));
   query_exec(querySql, project=getCloudProject())$ParticipantBarcode
 }
 
@@ -111,15 +124,15 @@ getBadGeneSymbols <- function() {
 #' @import digest
 #' @export
 getExpressionData <- function (cohort, genes) {
-  cohort <- sort(cohort);
-  genes <- sort(genes);
+  cohort <- if (is.null(cohort)) NULL else sort(cohort);
+  genes <- if (is.null(genes)) NULL else sort(genes);
   querySql <- sprintf ("
     SELECT
       HGNC_gene_symbol, gene_id, ParticipantBarCode, AliquotBarCode,
       ASINH(normalized_count) AS expression
     FROM %s
-    WHERE (%s AND %s)
-  ", ISB.rnaTable, testGene(genes), testParticipant(cohort));
+    %s
+  ", ISB.rnaTable, genWhereClause( testGene(genes), testParticipant(cohort) ));
 
   filename <- file.path ("data", sprintf ("q%s", digest::digest(querySql)));
   useCache <- getOption ("usecache", TRUE);
@@ -169,8 +182,8 @@ getClinicalData <- function (cohort, columns) {
           ParticipantBarCode,
           %s
         FROM %s
-        WHERE (%s)
-      ", paste(columns,collapse=","), ISB.clinicTable, testParticipant(cohort));
+        %s
+      ", paste(columns,collapse=","), ISB.clinicTable, genWhereClause (testParticipant(cohort)));
       qres <- query_exec(querySql, max_pages=Inf, project = getCloudProject());
       samples <- unique(qres$ParticipantBarCode);
       for (column in columns) {
@@ -214,8 +227,8 @@ getMutationData <- function (cohort, genes) {
           Hugo_Symbol,
           Variant_Classification
         FROM %s
-        WHERE (%s AND %s)
-      ", ISB.mutationTable, testHugoSymbol(genes), testParticipant(cohort));
+        %s
+      ", ISB.mutationTable, genWhereClause( testHugoSymbol(genes), testParticipant(cohort)));
       qres <- query_exec(querySql, max_pages=Inf, project = getCloudProject());
       samples <- unique(qres$ParticipantBarCode);
       for (gene in genes) {
